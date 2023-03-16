@@ -24,6 +24,7 @@ export class Repo extends DocCollection {
     storage,
     network,
     peerId,
+    sharePolicy,
     authProvider,
     idGenerator,
   }: RepoConfig) {
@@ -31,6 +32,7 @@ export class Repo extends DocCollection {
     this.#log = debug(`automerge-repo:repo:${peerId}`)
 
     if (idGenerator) this.idGenerator = idGenerator
+    if (sharePolicy) this.sharePolicy = sharePolicy
 
     // DOC COLLECTION
 
