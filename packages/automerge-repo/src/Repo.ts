@@ -22,7 +22,7 @@ export class Repo extends DocCollection {
 
   constructor({
     storage,
-    network,
+    network: networkAdapters,
     peerId,
     authProvider,
     idGenerator,
@@ -80,8 +80,12 @@ export class Repo extends DocCollection {
     // NETWORK
     // The network subsystem deals with sending and receiving messages to and from peers.
 
+    const authenticatedNetworkAdapters = authProvider
+      ? networkAdapters.map(adapter => authProvider.wrapNetworkAdapter(adapter))
+      : networkAdapters
+
     const networkSubsystem = new NetworkSubsystem(
-      network,
+      authenticatedNetworkAdapters,
       peerId,
       this.authProvider
     )
