@@ -3,6 +3,7 @@ export {
   authenticationError,
   type ValidAuthenticationResult,
   type InvalidAuthenticationResult,
+  type AuthenticationResult,
   type AuthenticateFn,
   type SharePolicy,
   AUTHENTICATION_VALID,

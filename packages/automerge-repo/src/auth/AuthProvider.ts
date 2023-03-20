@@ -1,11 +1,11 @@
-import { forwardEvents } from "../helpers/forwardEvents"
+import { forwardEvents } from "../helpers/forwardEvents.js"
 import {
   InboundMessagePayload,
   MessagePayload,
   NetworkAdapter,
-} from "../network/NetworkAdapter"
+} from "../network/NetworkAdapter.js"
 import { ChannelId, DocumentId, PeerId } from "../types.js"
-import { AuthChannel } from "./AuthChannel"
+import { AuthChannel } from "./AuthChannel.js"
 
 /**
  * An AuthProvider is responsible for authentication (proving that a peer is who they say they are)
@@ -96,11 +96,13 @@ export class AuthProvider {
  * transforms outbound messages.
  */
 class WrappedAdapter extends NetworkAdapter {
-  constructor(
-    private baseAdapter: NetworkAdapter,
-    private transform: Transform
-  ) {
+  baseAdapter: NetworkAdapter
+  transform: Transform
+
+  constructor(baseAdapter: NetworkAdapter, transform: Transform) {
     super()
+    this.baseAdapter = baseAdapter
+    this.transform = transform
   }
 
   // passthrough methods

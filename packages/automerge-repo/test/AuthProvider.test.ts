@@ -10,9 +10,9 @@ import {
 } from "../src/auth/AuthProvider.js"
 import { eventPromise } from "../src/helpers/eventPromise.js"
 import { pause } from "../src/helpers/pause.js"
-import { withTimeout } from "../src/helpers/withTimeout"
+import { withTimeout } from "../src/helpers/withTimeout.js"
 import { DocumentId, PeerId, Repo, SharePolicy } from "../src/index.js"
-import { decrypt, encrypt } from "./helpers/encrypt"
+import { decrypt, encrypt } from "./helpers/encrypt.js"
 import { expectPromises } from "./helpers/expectPromises.js"
 import type { TestDoc } from "./types"
 

@@ -13,30 +13,35 @@ export const AUTH_CHANNEL = "auth_channel" as ChannelId
  * adapter. It is created by the AuthProvider.
  */
 export class AuthChannel extends EventEmitter<AuthChannelEvents> {
-  #log: debug.Debugger
-  #closed = false
+  log: debug.Debugger
+  closed = false
 
-  constructor(private networkAdapter: NetworkAdapter, private peerId: PeerId) {
+  networkAdapter: NetworkAdapter
+  peerId: PeerId
+
+  constructor(networkAdapter: NetworkAdapter, peerId: PeerId) {
     super()
-    this.#log = debug(`automerge-repo:authchannel:${peerId}`)
-    this.networkAdapter.on("message", this.#onMessage)
+    this.log = debug(`automerge-repo:authchannel:${peerId}`)
+    this.networkAdapter = networkAdapter
+    this.peerId = peerId
+    this.networkAdapter.on("message", this.onMessage)
   }
 
   send(message: Uint8Array) {
-    this.#log("sending %o", messageSummary({ peerId: this.peerId, message }))
-    if (this.#closed) throw new Error("AuthChannel is closed")
+    this.log("sending %o", messageSummary({ peerId: this.peerId, message }))
+    if (this.closed) throw new Error("AuthChannel is closed")
     this.networkAdapter.sendMessage(this.peerId, AUTH_CHANNEL, message, false)
   }
 
   close() {
     this.removeAllListeners()
-    this.networkAdapter.off("message", this.#onMessage)
-    this.#closed = true
+    this.networkAdapter.off("message", this.onMessage)
+    this.closed = true
   }
 
-  #onMessage = (payload: InboundMessagePayload) => {
+  onMessage = (payload: InboundMessagePayload) => {
     if (payload.channelId === AUTH_CHANNEL) {
-      this.#log("received %o", messageSummary(payload))
+      this.log("received %o", messageSummary(payload))
       this.emit("message", payload.message)
     }
   }
