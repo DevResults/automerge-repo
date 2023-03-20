@@ -12,16 +12,21 @@ import {
   Device,
   DeviceWithSecrets,
   createTeam,
+  loadTeam,
   LocalUserContext,
+  KeysetWithSecrets,
 } from "@localfirst/auth"
 
 export class LocalFirstAuthProvider extends AuthProvider {
   #shares: Record<string, Share> = {}
   #userContext: LocalUserContext
+  #teamKeys: KeysetWithSecrets
+  #teamName: ShareId
 
   constructor({ user, device, source }: AuthProviderConfig) {
     super()
     this.#userContext = { user, device }
+    this.#teamName = source as ShareId
   }
 
   // override
@@ -33,11 +38,15 @@ export class LocalFirstAuthProvider extends AuthProvider {
   // custom methods
 
   getState = (): string => {
-    throw new Error("not implemented")
+    const share = this.getShare(this.#teamName)
+    const team = loadTeam(share.team.graph, this.#userContext, this.#teamKeys)
+    return team.teamName
   }
 
   createShare = (name: string): ShareId => {
-    const team = createTeam(name, this.#userContext)
+    const team = createTeam(name, this.#userContext, "aseed")
+    this.#teamName = name as ShareId
+    this.#teamKeys = team.teamKeys()
     const teamShare = { id: name, team: team } as Share
     this.#shares = { teamShare }
     return this.getShare(name as ShareId).id as ShareId
