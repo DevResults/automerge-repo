@@ -61,9 +61,9 @@ export class LocalFirstAuthProvider extends AuthProvider {
     throw "not implemented"
   }
 
-  addMember = (shareId: ShareId, user: User): void => {
-    // Team.add
-    throw "not implemented"
+  addMember = (shareId: ShareId, user: UserWithSecrets): void => {
+    const share = this.getShare(shareId)
+    share.team.add(user, [])
   }
 
   addDevice = (shareId: ShareId, device: Device): void => {
