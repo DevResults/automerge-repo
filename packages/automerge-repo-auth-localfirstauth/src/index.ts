@@ -34,6 +34,7 @@ export class LocalFirstAuthProvider extends AuthProvider {
   }
 
   createShare = (name: string): ShareId => {
+    // here we would instantiate a Team
     throw "not implemented"
   }
 
@@ -51,10 +52,12 @@ export class LocalFirstAuthProvider extends AuthProvider {
   members(shareId: ShareId, userId: string): User
 
   members(shareId: ShareId, userId?: string): User | User[] {
+    // Team.members
     throw "not implemented"
   }
 
   addMember = (shareId: ShareId, user: User): void => {
+    // Team.add
     throw "not implemented"
   }
 
