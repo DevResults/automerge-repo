@@ -64,10 +64,17 @@ export class LocalFirstAuthProvider extends AuthProvider {
   addMember = (shareId: ShareId, user: UserWithSecrets): void => {
     const share = this.getShare(shareId)
     share.team.add(user, [])
+    const member = share.team.members(user.userId)
+    // The devices variable is initiated as undefined and was causing issues in the
+    // addDevice func. Maybe there is a different way of initiating the array of devices
+    // of a member that I couldn't figure out yet
+    member.devices = []
   }
 
   addDevice = (shareId: ShareId, device: Device): void => {
-    throw "not implemented"
+    const share = this.getShare(shareId)
+    const member = share.team.members(device.userId)
+    member.devices.push(device)
   }
 
   inviteMember = (shareId: ShareId): { id: string; seed: string } => {
