@@ -41,7 +41,7 @@ describe("localfirst/auth provider", () => {
     // Now we pretend Alice already has interacted with Bob and knows his public keys. The
     // "redacted" user object doesn't have the private keys, and that's what Alice would have
     // stored.
-    aliceAuthProvider.addMember(shareId, bob)
+    aliceAuthProvider.addMember(shareId, { ...redactUser(bob), roles: [] })
     aliceAuthProvider.addDevice(shareId, redactDevice(bobDevice))
 
     // Alice saves her state

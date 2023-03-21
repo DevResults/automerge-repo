@@ -1,55 +1,60 @@
 import {
-  AuthProvider,
   AuthenticateFn,
   AUTHENTICATION_VALID,
+  AuthProvider,
   DocumentId,
 } from "automerge-repo"
 
+import { v4 as uuid } from "uuid"
+
 import {
-  Team,
-  User,
-  UserWithSecrets,
+  createTeam,
   Device,
   DeviceWithSecrets,
-  createTeam,
-  loadTeam,
   LocalUserContext,
-  KeysetWithSecrets,
+  Member,
+  Team,
+  UserWithSecrets,
 } from "@localfirst/auth"
 
 export class LocalFirstAuthProvider extends AuthProvider {
   #shares: Record<string, Share> = {}
   #userContext: LocalUserContext
-  #teamKeys: KeysetWithSecrets
-  #teamName: ShareId
+  #idGenerator: IdGenerator
 
-  constructor({ user, device, source }: AuthProviderConfig) {
+  constructor({
+    user,
+    device,
+    source,
+    idGenerator = uuid as IdGenerator,
+  }: AuthProviderConfig) {
     super()
     this.#userContext = { user, device }
-    this.#teamName = source as ShareId
+    this.#idGenerator = idGenerator
+    if (source) {
+      this.#shares = JSON.parse(source)
+    }
   }
 
   // override
 
   authenticate: AuthenticateFn = async (peerId, channel) => {
+    // TODO
     return AUTHENTICATION_VALID
   }
 
   // custom methods
 
   getState = (): string => {
-    const share = this.getShare(this.#teamName)
-    const team = loadTeam(share.team.graph, this.#userContext, this.#teamKeys)
-    return team.teamName
+    return JSON.stringify(this.#shares)
   }
 
   createShare = (name: string): ShareId => {
-    const team = createTeam(name, this.#userContext, "aseed")
-    this.#teamName = name as ShareId
-    this.#teamKeys = team.teamKeys()
-    const teamShare = { id: name, team: team } as Share
-    this.#shares = { teamShare }
-    return this.getShare(name as ShareId).id as ShareId
+    const id = this.#idGenerator()
+    const team = createTeam(name, this.#userContext)
+    const share = { id, team, permissions: {} } as Share
+    this.#shares.id = share
+    return id
   }
 
   joinShare = ({
@@ -62,32 +67,26 @@ export class LocalFirstAuthProvider extends AuthProvider {
     throw "not implemented"
   }
 
-  members(shareId: ShareId): User[]
-  members(shareId: ShareId, userId: string): User
+  members(shareId: ShareId): Member[]
+  members(shareId: ShareId, userId: string): Member
 
-  members(shareId: ShareId, userId?: string): User | User[] {
-    // Team.members
-    throw "not implemented"
+  members(shareId: ShareId, userId?: string): Member | Member[] {
+    const { team } = this.getShare(shareId)
+    return team.members(userId)
   }
 
-  addMember = (shareId: ShareId, user: UserWithSecrets): void => {
-    const share = this.getShare(shareId)
-    share.team.add(user, [])
-    const member = share.team.members(user.userId)
-    // The devices variable is initiated as undefined and was causing issues in the
-    // addDevice func. Maybe there is a different way of initiating the array of devices
-    // of a member that I couldn't figure out yet
-    member.devices = []
+  addMember = (shareId: ShareId, user: Member): void => {
+    throw "not implemented"
   }
 
   addDevice = (shareId: ShareId, device: Device): void => {
-    const share = this.getShare(shareId)
-    const member = share.team.members(device.userId)
-    member.devices.push(device)
+    throw "not implemented"
   }
 
   inviteMember = (shareId: ShareId): { id: string; seed: string } => {
-    throw "not implemented"
+    const team = this.getShare(shareId).team
+    const { id, seed } = team.inviteMember()
+    return { id, seed }
   }
 
   inviteDevice = (shareId: ShareId): { id: string; seed: string } => {
@@ -103,28 +102,40 @@ export class LocalFirstAuthProvider extends AuthProvider {
     documentIds: DocumentId[]
     roles?: RolePermissions
   }): void {
-    throw "not implemented"
+    const share = this.getShare(shareId)
+    documentIds.forEach(id => {
+      share.permissions[id] = roles
+    })
   }
 
   removeDocument({
     shareId,
     documentIds,
-    roles = [],
   }: {
     shareId: ShareId
     documentIds: DocumentId[]
-    roles?: RolePermissions
   }): void {
-    throw "not implemented"
+    const share = this.getShare(shareId)
+    documentIds.forEach(id => {
+      delete share.permissions[id]
+    })
   }
 
-  setRoles({ documentId, roles }: { documentId: DocumentId; roles: string[] }) {
-    throw "not implemented"
+  setRoles({
+    shareId,
+    documentId,
+    roles,
+  }: {
+    shareId: ShareId
+    documentId: DocumentId
+    roles: string[]
+  }) {
+    const share = this.getShare(shareId)
+    share.permissions[documentId] = roles
   }
-  private getShare(name: ShareId) {
-    return (Object.values(this.#shares) as Array<Share>).find(
-      key => key.id === name.toString()
-    )
+
+  private getShare(id: ShareId) {
+    return this.#shares[id]
   }
 }
 
@@ -132,11 +143,13 @@ export type AuthProviderConfig = {
   user: UserWithSecrets
   device: DeviceWithSecrets
   source?: string
+  idGenerator?: IdGenerator
 }
 
 export type Share = {
   id: string
   team: Team
+  permissions: Record<DocumentId, RolePermissions>
 }
 
 /**
@@ -146,12 +159,13 @@ export type Share = {
  * ```
  * or a map of read/write roles:
  * ```ts
- * const roles = {
- *   read: ["ADMIN", "MANAGEMENT"],
- *   write: ["ADMIN"]
- * }
+ * const roles = { read: ["ADMIN", "MANAGEMENT"], write: ["ADMIN"] }
  * ```
  * */
-export type RolePermissions = string[] | { read: string[]; write: string[] }
+export type RolePermissions = Role[] | { read: Role[]; write: Role[] }
 
 export type ShareId = string & { __shareId: false }
+
+export type Role = string
+
+export type IdGenerator = () => ShareId
