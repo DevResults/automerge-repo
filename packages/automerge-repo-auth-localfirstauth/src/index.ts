@@ -13,7 +13,7 @@ const AUTH_CHANNEL = "auth_channel" as ChannelId
 
 export class LocalFirstAuthProvider extends AuthProvider {
   team: Team
-  connection: Connection // TODO: multiple peers in one adapter... right?
+  connections: Record<PeerId, Connection> = {}
 
   constructor(private context: InitialContext) {
     super()
@@ -26,7 +26,7 @@ export class LocalFirstAuthProvider extends AuthProvider {
 
     // try to authenticate new peers; if we succeed, we forward the peer-candidate event
     baseAdapter.on("peer-candidate", async ({ peerId, channelId }) => {
-      if (this.connection != null) return // maybe try reconnecting or something?
+      if (this.connections[peerId] != null) return // maybe try reconnecting or something?
       const connection = new Connection({
         context: this.context,
         sendMessage: message => {
@@ -35,7 +35,7 @@ export class LocalFirstAuthProvider extends AuthProvider {
         },
         peerUserId: peerId,
       })
-      this.connection = connection
+      this.connections[peerId] = connection
 
       connection
         .on("joined", ({ team }) => {
@@ -66,8 +66,8 @@ export class LocalFirstAuthProvider extends AuthProvider {
           // disconnect?
         })
         .on("disconnected", event => {
-          this.connection.removeAllListeners()
-          delete this.connection
+          this.connections[peerId].removeAllListeners()
+          delete this.connections[peerId]
           wrappedAdapter.emit("peer-disconnected", { peerId })
         })
 
@@ -78,7 +78,8 @@ export class LocalFirstAuthProvider extends AuthProvider {
     baseAdapter.on("message", payload => {
       try {
         if (payload.channelId === AUTH_CHANNEL) {
-          this.connection.deliver(new TextDecoder().decode(payload.message))
+          const { senderId: peerId, message } = payload
+          this.connections[peerId].deliver(new TextDecoder().decode(message))
         } else {
           const transformedPayload = this.transform.inbound(payload)
           wrappedAdapter.emit("message", transformedPayload)
