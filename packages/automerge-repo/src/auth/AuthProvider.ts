@@ -97,7 +97,7 @@ export class AuthProvider {
  * A WrappedAdapter is a NetworkAdapter that wraps another NetworkAdapter and
  * transforms outbound messages.
  */
-class WrappedAdapter extends NetworkAdapter {
+export class WrappedAdapter extends NetworkAdapter {
   baseAdapter: NetworkAdapter
   transform: Transform
 
