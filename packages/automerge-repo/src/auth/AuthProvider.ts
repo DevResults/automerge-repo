@@ -5,7 +5,7 @@ import {
   NetworkAdapter,
 } from "../network/NetworkAdapter.js"
 import { ChannelId, DocumentId, PeerId } from "../types.js"
-import { AuthChannel } from "./AuthChannel.js"
+import { AuthChannel, AUTH_CHANNEL } from "./AuthChannel.js"
 
 /**
  * An AuthProvider is responsible for authentication (proving that a peer is who they say they are)
@@ -66,8 +66,10 @@ export class AuthProvider {
     // transform incoming messages
     baseAdapter.on("message", payload => {
       try {
-        const transformedPayload = transform.inbound(payload)
-        wrappedAdapter.emit("message", transformedPayload)
+        if (payload.channelId !== AUTH_CHANNEL) {
+          const transformedPayload = transform.inbound(payload)
+          wrappedAdapter.emit("message", transformedPayload)
+        }
       } catch (e) {
         wrappedAdapter.emit("error", {
           peerId: payload.senderId,

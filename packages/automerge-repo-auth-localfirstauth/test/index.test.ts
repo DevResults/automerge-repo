@@ -2,6 +2,7 @@ import assert from "assert"
 import {
   createDevice,
   createUser,
+  InitialContext,
   redactDevice,
   redactUser,
 } from "@localfirst/auth"
@@ -17,9 +18,10 @@ describe("localfirst/auth provider", () => {
     const alice = createUser("alice")
     const aliceDevice = createDevice(alice.userId, "ALICE-MACBOOK-2023")
 
-    const config: AuthProviderConfig = {
+    const config: InitialContext = {
       user: alice,
       device: aliceDevice,
+      team: alice,
     }
 
     const aliceAuthProvider = new LocalFirstAuthProvider(config)
