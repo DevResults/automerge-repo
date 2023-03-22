@@ -1,27 +1,28 @@
 import assert from "assert"
 import {
   createDevice,
+  createTeam,
   createUser,
   InitialContext,
   redactDevice,
-  redactUser,
 } from "@localfirst/auth"
 import { PeerId, Repo } from "automerge-repo"
 import { MessageChannelNetworkAdapter } from "automerge-repo-network-messagechannel"
-import { AuthProviderConfig, LocalFirstAuthProvider, ShareId } from "../src"
+import { LocalFirstAuthProvider } from "../src"
 
-import { expectPromises } from "../../automerge-repo/test/helpers/expectPromises.js"
 import { eventPromise } from "../../automerge-repo/src/helpers/eventPromise.js"
 
 describe("localfirst/auth provider", () => {
-  it("???", async () => {
+  it("can authenticate users with a magic team", async () => {
     const alice = createUser("alice")
     const aliceDevice = createDevice(alice.userId, "ALICE-MACBOOK-2023")
+
+    const team = createTeam("a team", { user: alice, device: aliceDevice })
 
     const config: InitialContext = {
       user: alice,
       device: aliceDevice,
-      team: alice,
+      team: team,
     }
 
     const aliceAuthProvider = new LocalFirstAuthProvider(config)
@@ -35,25 +36,16 @@ describe("localfirst/auth provider", () => {
       authProvider: aliceAuthProvider,
     })
 
-    const shareId = aliceAuthProvider.createShare("alice's share")
-
     const bob = createUser("bob")
     const bobDevice = createDevice(bob.userId, "bob-samsung-tablet")
 
-    // Now we pretend Alice already has interacted with Bob and knows his public keys. The
-    // "redacted" user object doesn't have the private keys, and that's what Alice would have
-    // stored.
-    aliceAuthProvider.addMember(shareId, { ...redactUser(bob), roles: [] })
-    aliceAuthProvider.addDevice(shareId, redactDevice(bobDevice))
-
-    // Alice saves her state
-    const savedState = aliceAuthProvider.getState()
+    team.addForTesting(bob, [], redactDevice(bobDevice))
 
     // Bob magically has the same state as Alice
     const bobAuthProvider = new LocalFirstAuthProvider({
       user: bob,
       device: bobDevice,
-      source: savedState,
+      team: team,
     })
 
     const bobRepo = new Repo({
@@ -68,10 +60,11 @@ describe("localfirst/auth provider", () => {
     })
 
     // if these resolve, we've been authenticated
-    await expectPromises(
+    await Promise.all([
       eventPromise(aliceRepo.networkSubsystem, "peer"), // ✅
-      eventPromise(bobRepo.networkSubsystem, "peer") // ✅
-    )
+      eventPromise(bobRepo.networkSubsystem, "peer"), // ✅
+    ])
+
     // bob should now receive alice's document
     const bobHandle = bobRepo.find<TestDoc>(aliceHandle.documentId)
     await eventPromise(bobHandle, "change")
