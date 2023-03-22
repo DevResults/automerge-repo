@@ -15,9 +15,16 @@ import {
 } from "@localfirst/auth"
 
 export class LocalFirstAuthProvider extends AuthProvider {
+  team: Team
+  connection: Connection
+
   constructor(private context: InitialContext) {
     super()
+    if ("team" in context) this.team = context.team
   }
+
+  // NEXT:
+  // instead of this, override the whole wrapNetworkAdapter method
 
   // override
 
@@ -30,6 +37,9 @@ export class LocalFirstAuthProvider extends AuthProvider {
       },
       peerUserId: peerId,
     })
+
+    this.connection = connection
+
     channel.on("message", messageBytes => {
       const message = new TextDecoder().decode(messageBytes)
       connection.deliver(message)
@@ -37,32 +47,38 @@ export class LocalFirstAuthProvider extends AuthProvider {
     try {
       await new Promise<void>((resolve, reject) => {
         connection
-          .on("joined", ({ team, user }) => {
-            // no longer an invitee - update our context for future connections
-            // const { device } = this.context as InviteeMemberInitialContext
-            // this.context = { device, user, team } as MemberInitialContext
-            // this.emit("joined", { team, user })
-            resolve()
+          .on("joined", ({ team }) => {
+            this.team = team
+            // resolve()
           })
           .on("connected", () => {
-            // this.emit("connected", connection)
+            // const seed = connection.seed
+            // TODO encrypt with this seed
+            this.transform = {
+              inbound: payload => {
+                // const decrypted = decrypt(payload.message, secretKey)
+                // return { ...payload, message: decrypted }
+                return payload
+              },
+              outbound: payload => {
+                // const encrypted = encrypt(payload.message, secretKey)
+                // return { ...payload, message: encrypted }
+                return payload
+              },
+            }
             resolve()
           })
           .on("change", state => {
-            // this.updateStatus(peerUserName, state)
-            // this.emit("change", { userName: peerUserName, state })
+            // TODO: I don't think we need to do anything here?
           })
           .on("localError", type => {
-            // this.emit("localError", type)
             reject(type)
           })
           .on("remoteError", type => {
-            // this.emit("remoteError", type)
             reject(type)
           })
           .on("disconnected", event => {
-            // this.disconnectPeer(peerUserName, event)
-            // resolve()
+            reject("disconnected")
           })
 
         connection.start()
@@ -71,26 +87,6 @@ export class LocalFirstAuthProvider extends AuthProvider {
     } catch (error) {
       return authenticationError(error.message)
     }
-  }
-
-  // custom methods
-
-  members(): Member[]
-  members(userId: string): Member
-
-  members(userId?: string): Member | Member[] {
-    // return this.context.team.members(userId)
-    throw "not implemented"
-  }
-
-  inviteMember = (): { id: string; seed: string } => {
-    // const { id, seed } = this.team.inviteMember()
-    // return { id, seed }
-    throw "not implemented"
-  }
-
-  inviteDevice = (): { id: string; seed: string } => {
-    throw "not implemented"
   }
 }
 
