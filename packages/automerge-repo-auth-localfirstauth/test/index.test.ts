@@ -4,6 +4,7 @@ import {
   createTeam,
   createUser,
   InitialContext,
+  loadTeam,
   redactDevice,
 } from "@localfirst/auth"
 import { PeerId, Repo } from "automerge-repo"
@@ -13,9 +14,80 @@ import { LocalFirstAuthProvider } from "../src"
 import { eventPromise } from "../../automerge-repo/src/helpers/eventPromise.js"
 
 describe("localfirst/auth provider", () => {
-  it("can authenticate invited users", async () => {
+  it("can authenticate users that are already on the same team", async () => {
     const alice = createUser("alice")
     const aliceDevice = createDevice(alice.userId, "ALICE-MACBOOK-2023")
+
+    const aliceBobChannel = new MessageChannel()
+    const { port1: aliceToBob, port2: bobToAlice } = aliceBobChannel
+
+    const aliceTeam = createTeam("a team", { user: alice, device: aliceDevice })
+
+    const config: InitialContext = {
+      user: alice,
+      device: aliceDevice,
+      team: aliceTeam,
+    }
+
+    const aliceAuthProvider = new LocalFirstAuthProvider(config)
+
+    const aliceRepo = new Repo({
+      network: [new MessageChannelNetworkAdapter(aliceToBob)],
+      peerId: "alice" as PeerId,
+      authProvider: aliceAuthProvider,
+    })
+
+    // Let's pretend Bob is already on Alice's team and has synced up in the past
+    const bob = createUser("bob")
+    const bobDevice = createDevice(bob.userId, "bob-samsung-tablet")
+    aliceTeam.addForTesting(bob, [], redactDevice(bobDevice))
+    const bobTeam = loadTeam(
+      aliceTeam.save(),
+      {
+        user: bob,
+        device: bobDevice,
+      },
+      aliceTeam.teamKeys()
+    )
+
+    const bobAuthProvider = new LocalFirstAuthProvider({
+      user: bob,
+      device: bobDevice,
+      team: bobTeam,
+    })
+    const bobRepo = new Repo({
+      network: [new MessageChannelNetworkAdapter(bobToAlice)],
+      peerId: "bob" as PeerId,
+      authProvider: bobAuthProvider,
+    })
+
+    const aliceHandle = aliceRepo.create<TestDoc>()
+    aliceHandle.change(d => {
+      d.foo = "bar"
+    })
+
+    // if these resolve, we've been authenticated
+    await Promise.all([
+      eventPromise(aliceRepo.networkSubsystem, "peer"),
+      eventPromise(bobRepo.networkSubsystem, "peer"),
+    ])
+
+    // bob should now receive alice's document
+    const bobHandle = bobRepo.find<TestDoc>(aliceHandle.documentId)
+    await eventPromise(bobHandle, "change")
+    const doc = await bobHandle.value()
+    assert.equal(doc.foo, "bar")
+
+    aliceToBob.close()
+    bobToAlice.close()
+  })
+
+  it("can authenticate an invited user", async () => {
+    const alice = createUser("alice")
+    const aliceDevice = createDevice(alice.userId, "ALICE-MACBOOK-2023")
+
+    const aliceBobChannel = new MessageChannel()
+    const { port1: aliceToBob, port2: bobToAlice } = aliceBobChannel
 
     const team = createTeam("a team", { user: alice, device: aliceDevice })
     const { seed: bobInvite } = team.inviteMember()
@@ -27,9 +99,6 @@ describe("localfirst/auth provider", () => {
     }
 
     const aliceAuthProvider = new LocalFirstAuthProvider(config)
-
-    const aliceBobChannel = new MessageChannel()
-    const { port1: aliceToBob, port2: bobToAlice } = aliceBobChannel
 
     const aliceRepo = new Repo({
       network: [new MessageChannelNetworkAdapter(aliceToBob)],
@@ -60,8 +129,8 @@ describe("localfirst/auth provider", () => {
 
     // if these resolve, we've been authenticated
     await Promise.all([
-      eventPromise(aliceRepo.networkSubsystem, "peer"), // ✅
-      eventPromise(bobRepo.networkSubsystem, "peer"), // ✅
+      eventPromise(aliceRepo.networkSubsystem, "peer"),
+      eventPromise(bobRepo.networkSubsystem, "peer"),
     ])
 
     // bob should now receive alice's document
