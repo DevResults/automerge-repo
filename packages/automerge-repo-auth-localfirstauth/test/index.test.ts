@@ -13,11 +13,12 @@ import { LocalFirstAuthProvider } from "../src"
 import { eventPromise } from "../../automerge-repo/src/helpers/eventPromise.js"
 
 describe("localfirst/auth provider", () => {
-  it("can authenticate users with a magic team", async () => {
+  it("can authenticate invited users", async () => {
     const alice = createUser("alice")
     const aliceDevice = createDevice(alice.userId, "ALICE-MACBOOK-2023")
 
     const team = createTeam("a team", { user: alice, device: aliceDevice })
+    const { seed: bobInvite } = team.inviteMember()
 
     const config: InitialContext = {
       user: alice,
@@ -39,13 +40,11 @@ describe("localfirst/auth provider", () => {
     const bob = createUser("bob")
     const bobDevice = createDevice(bob.userId, "bob-samsung-tablet")
 
-    team.addForTesting(bob, [], redactDevice(bobDevice))
-
-    // Bob magically has the same state as Alice
+    // Bob has an invite from Alice (shared via side channel)
     const bobAuthProvider = new LocalFirstAuthProvider({
       user: bob,
       device: bobDevice,
-      team: team,
+      invitationSeed: bobInvite,
     })
 
     const bobRepo = new Repo({
