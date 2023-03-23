@@ -1,6 +1,7 @@
 export {
   AuthProvider,
   authenticationError,
+  WrappedAdapter,
   type ValidAuthenticationResult,
   type InvalidAuthenticationResult,
   type AuthenticationResult,
