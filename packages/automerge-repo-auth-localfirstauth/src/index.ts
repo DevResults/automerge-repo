@@ -1,20 +1,27 @@
-import { AuthProvider, ChannelId, NetworkAdapter, PeerId } from "automerge-repo"
-
+import {
+  WrappedAdapter,
+  AuthProvider,
+  ChannelId,
+  NetworkAdapter,
+  PeerId,
+} from "automerge-repo"
 import {
   Connection,
   DeviceWithSecrets,
   InitialContext,
   Team,
   UserWithSecrets,
+  symmetric,
 } from "@localfirst/auth"
-import { WrappedAdapter } from "automerge-repo/dist/auth/AuthProvider"
 
+const { encrypt, decrypt } = symmetric
 const AUTH_CHANNEL = "auth_channel" as ChannelId
 
 export class LocalFirstAuthProvider extends AuthProvider {
-  team: Team
-  connections: Record<PeerId, Connection> = {}
+  team: Team // TODO: multiple teams
+  connections: Record<PeerId, Connection> = {} // TODO: one connection per peer per team
 
+  // TODO: contructor receives an array of teams
   constructor(private context: InitialContext) {
     super()
     if ("team" in context) this.team = context.team
@@ -26,7 +33,12 @@ export class LocalFirstAuthProvider extends AuthProvider {
 
     // try to authenticate new peers; if we succeed, we forward the peer-candidate event
     baseAdapter.on("peer-candidate", async ({ peerId, channelId }) => {
+      // TODO: here we need to know which team to use
+
       if (this.connections[peerId] != null) return // maybe try reconnecting or something?
+
+      // TODO: a sync server
+
       const connection = new Connection({
         context: this.context,
         sendMessage: message => {
@@ -45,12 +57,17 @@ export class LocalFirstAuthProvider extends AuthProvider {
           // const seed = connection.seed
           // TODO encrypt with this seed
           this.transform.inbound = payload => {
-            // const decrypted = decrypt(payload.message, secretKey)
+            // const message = payload.message
+            // const decrypted = new TextEncoder().encode(
+            //   decrypt(message, connection.seed)
+            // )
             // return { ...payload, message: decrypted }
             return payload
           }
           this.transform.outbound = payload => {
-            // const encrypted = encrypt(payload.message, secretKey)
+            // const encrypted = new TextEncoder().encode(
+            //   encrypt(payload.message, connection.seed)
+            // )
             // return { ...payload, message: encrypted }
             return payload
           }
@@ -78,6 +95,7 @@ export class LocalFirstAuthProvider extends AuthProvider {
     baseAdapter.on("message", payload => {
       try {
         if (payload.channelId === AUTH_CHANNEL) {
+          // here we need to know which team to use to know which
           const { senderId: peerId, message } = payload
           this.connections[peerId].deliver(new TextDecoder().decode(message))
         } else {

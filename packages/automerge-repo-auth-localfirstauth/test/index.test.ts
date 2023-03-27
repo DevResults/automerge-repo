@@ -113,7 +113,7 @@ describe("localfirst/auth provider", () => {
     const bobAuthProvider = new LocalFirstAuthProvider({
       user: bob,
       device: bobDevice,
-      invitationSeed: bobInvite,
+      invitationSeed: bobInvite, // { seed: bobInvite, teamId: team.teamId },
     })
 
     const bobRepo = new Repo({
