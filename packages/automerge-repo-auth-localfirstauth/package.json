@@ -11,10 +11,10 @@
   "scripts": {
     "build": "tsc",
     "watch": "npm-watch",
-    "test": "mocha --no-warnings --experimental-specifier-resolution=node"
+    "test": "mocha --no-warnings --experimental-specifier-resolution=node --exit"
   },
   "dependencies": {
-    "@localfirst/auth": "^1.0.1"
+    "@localfirst/auth": "^4.0.1"
   },
   "watch": {
     "build": {

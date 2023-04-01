@@ -9,7 +9,6 @@ import { ChannelId, PeerId } from "./types.js"
 import { AuthProvider } from "./auth/AuthProvider.js"
 
 import debug from "debug"
-import { AUTH_CHANNEL } from "./auth/AuthChannel"
 
 const SYNC_CHANNEL = "sync_channel" as ChannelId
 
@@ -89,6 +88,12 @@ export class Repo extends DocCollection {
 
     const networkSubsystem = new NetworkSubsystem(wrappedAdapters, peerId)
     this.networkSubsystem = networkSubsystem
+
+    // The auth provider might request to join specific channels
+    // for example, LocalFirstAuthProvider joins one channel per share
+    authProvider?.on("join", (channelId: ChannelId) => {
+      networkSubsystem.join(channelId)
+    })
 
     // When we get a new peer, register it with the synchronizer
     networkSubsystem.on("peer", ({ peerId }) => {

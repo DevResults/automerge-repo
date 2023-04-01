@@ -1,3 +1,4 @@
+import { EventEmitter } from "eventemitter3"
 import { forwardEvents } from "../helpers/forwardEvents.js"
 import {
   InboundMessagePayload,
@@ -16,7 +17,7 @@ import { AuthChannel, AUTH_CHANNEL } from "./AuthChannel.js"
  * An AuthProvider can be configured by passing a config object to the constructor, or by extending
  * the class and overriding methods.
  */
-export class AuthProvider {
+export class AuthProvider extends EventEmitter<AuthEvents> {
   /** Is this peer who they say they are? */
   authenticate: AuthenticateFn = async () => AUTHENTICATION_VALID
 
@@ -35,6 +36,7 @@ export class AuthProvider {
   okToSync: SharePolicy = ALWAYS_OK
 
   constructor(config: AuthProviderConfig = {}) {
+    super()
     return Object.assign(this, config)
   }
 
@@ -188,3 +190,7 @@ export const AUTHENTICATION_VALID: ValidAuthenticationResult = { isValid: true }
 
 export const ALWAYS_OK: SharePolicy = async () => true
 export const NEVER_OK: SharePolicy = async () => false
+
+export type AuthEvents = {
+  join: (channelId: ChannelId) => void
+}

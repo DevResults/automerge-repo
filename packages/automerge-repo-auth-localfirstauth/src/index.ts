@@ -1,30 +1,140 @@
 import {
-  WrappedAdapter,
-  AuthProvider,
-  ChannelId,
-  NetworkAdapter,
-  PeerId,
-} from "automerge-repo"
-import {
+  Base58,
   Connection,
+  createTeam,
   DeviceWithSecrets,
-  InitialContext,
+  Hash,
+  Keyset,
+  KeysetWithSecrets,
+  loadTeam,
+  MemberInitialContext,
+  symmetric,
   Team,
   UserWithSecrets,
-  symmetric,
 } from "@localfirst/auth"
-
+import assert from "assert"
+import {
+  AuthProvider,
+  ChannelId,
+  DocumentId,
+  NetworkAdapter,
+  PeerId,
+  WrappedAdapter,
+} from "automerge-repo"
 const { encrypt, decrypt } = symmetric
-const AUTH_CHANNEL = "auth_channel" as ChannelId
 
 export class LocalFirstAuthProvider extends AuthProvider {
-  team: Team // TODO: multiple teams
-  connections: Record<PeerId, Connection> = {} // TODO: one connection per peer per team
+  private device: DeviceWithSecrets
+  private user?: UserWithSecrets
+  private shares: Record<ShareId, Share> = {} as Record<ShareId, Share>
 
-  // TODO: contructor receives an array of teams
-  constructor(private context: InitialContext) {
+  constructor(config: AuthProviderConfig) {
     super()
-    if ("team" in context) this.team = context.team
+    // we always are given the local device's info & keys
+    this.device = config.device
+
+    // we might already have our user info, unless we're a first-time device being invited
+    if ("user" in config) this.user = config.user
+  }
+
+  public save() {
+    const shares = {} as PartiallySerializedState
+    for (const shareId in this.shares) {
+      const share = this.shares[shareId]
+      shares[shareId] = {
+        encryptedTeam: share.team.save(),
+        encryptedTeamKeys: symmetric.encrypt(
+          share.teamKeys,
+          this.device.keys.secretKey
+        ),
+        documentIds: [...share.documentIds],
+      } as PartiallySerializedShare
+    }
+    return JSON.stringify(shares)
+  }
+
+  public load(savedState: string) {
+    const savedShares = JSON.parse(savedState) as PartiallySerializedState
+    for (const shareId in savedShares) {
+      const share = savedShares[shareId] as PartiallySerializedShare
+      const { encryptedTeam, encryptedTeamKeys, documentIds } = share
+      const teamKeys = symmetric.decrypt(
+        encryptedTeamKeys,
+        this.device.keys.secretKey
+      ) as KeysetWithSecrets
+
+      const context = { device: this.device, user: this.user }
+      this.shares[shareId] = {
+        team: loadTeam(encryptedTeam, context, teamKeys),
+        teamKeys: teamKeys,
+        documentIds: new Set(documentIds),
+        connections: {},
+      }
+    }
+  }
+
+  public addShare(
+    team: Team,
+    teamKeys: KeysetWithSecrets,
+    documentIds: DocumentId[] = []
+  ) {
+    this.shares[team.id] = {
+      team,
+      teamKeys,
+      documentIds: new Set(documentIds),
+      connections: {},
+    }
+    // TODO: make connections
+  }
+
+  public createShare(documentIds: DocumentId[] = []): ShareId {
+    assert(this.user, "must have a user to create a share")
+    const team = createTeam("", { device: this.device, user: this.user }) // TODO: Team.name isn't used for anything, should probably get rid of it
+    this.shares[team.id] = {
+      team,
+      documentIds: new Set(documentIds),
+      teamKeys: team.teamKeys(),
+      connections: {},
+    }
+    // TODO: make connections
+    return team.id as TeamId
+  }
+
+  public joinAsMember({ shareId, user, invitationSeed }: MemberInvitation) {
+    this.user = user // just in case (we could have been instantiated without a user)
+    // TODO: make connections
+  }
+
+  public joinAsDevice({
+    shareId,
+    userName,
+    userId,
+    invitationSeed,
+  }: DeviceInvitation) {
+    // TODO: make connections
+  }
+
+  public inviteMember({
+    shareId,
+    seed,
+    expiration,
+    maxUses,
+  }: InviteMemberParams) {
+    const share = this.shares[shareId]
+    assert(share, `share not found: ${shareId}`)
+    return share.team.inviteMember({ seed, expiration, maxUses })
+  }
+
+  public inviteDevice({ shareId, seed, expiration }: InviteDeviceParams) {
+    const share = this.shares[shareId]
+    assert(share, `share not found: ${shareId}`)
+    return share.team.inviteDevice({ seed, expiration })
+  }
+
+  public addDocuments(shareId: ShareId, documentIds: DocumentId[]) {
+    const share = this.shares[shareId]
+    assert(share, `share not found: ${shareId}`)
+    documentIds.forEach(id => share.documentIds.add(id))
   }
 
   // override
@@ -33,29 +143,53 @@ export class LocalFirstAuthProvider extends AuthProvider {
 
     // try to authenticate new peers; if we succeed, we forward the peer-candidate event
     baseAdapter.on("peer-candidate", async ({ peerId, channelId }) => {
-      // TODO: here we need to know which team to use
+      console.log({ peerId, channelId })
 
-      if (this.connections[peerId] != null) return // maybe try reconnecting or something?
+      const shareId = channelId.slice(2) as ShareId // everything after 'a/'
 
-      // TODO: a sync server
+      const getContext = () => {
+        if (this.user && this.shares[shareId]) {
+          return {
+            device: this.device,
+            team: this.shares[shareId].team,
+            user: this.user,
+          } as MemberInitialContext
+        }
+        // else if (this.deviceInvitation) {
+        //   return {
+        //     device: this.device,
+        //     ...this.deviceInvitation,
+        //   } as InviteeDeviceInitialContext
+        // } else if (this.memberInvitation) {
+        //   return {
+        //     device: this.device,
+        //     ...this.memberInvitation,
+        //   } as InviteeMemberInitialContext
+        throw new Error()
+      }
 
       const connection = new Connection({
-        context: this.context,
+        context: getContext(),
         sendMessage: message => {
           const messageBytes = new TextEncoder().encode(message)
-          baseAdapter.sendMessage(peerId, AUTH_CHANNEL, messageBytes, false)
+          baseAdapter.sendMessage(
+            peerId,
+            authChannelName(shareId),
+            messageBytes,
+            false
+          )
         },
         peerUserId: peerId,
       })
-      this.connections[peerId] = connection
+      this.shares[shareId][peerId] = connection
 
       connection
-        .on("joined", ({ team }) => {
-          this.team = team // TODO: sync server needs to have more than one team, right?
+        .on("joined", ({ team, user }) => {
+          this.user = user
+          this.shares[team.id].team = team
         })
         .on("connected", () => {
-          // const seed = connection.seed
-          // TODO encrypt with this seed
+          const { seed } = connection.context
           this.transform.inbound = payload => {
             // const message = payload.message
             // const decrypted = new TextEncoder().encode(
@@ -83,8 +217,8 @@ export class LocalFirstAuthProvider extends AuthProvider {
           // disconnect?
         })
         .on("disconnected", event => {
-          this.connections[peerId].removeAllListeners()
-          delete this.connections[peerId]
+          // this.connections[teamId][peerId].removeAllListeners()
+          // delete this.connections[teamId][peerId]
           wrappedAdapter.emit("peer-disconnected", { peerId })
         })
 
@@ -94,10 +228,12 @@ export class LocalFirstAuthProvider extends AuthProvider {
     // transform incoming messages
     baseAdapter.on("message", payload => {
       try {
-        if (payload.channelId === AUTH_CHANNEL) {
-          // here we need to know which team to use to know which
+        if (payload.channelId.startsWith("a/")) {
+          const teamId = payload.channelId.slice(2)
           const { senderId: peerId, message } = payload
-          this.connections[peerId].deliver(new TextDecoder().decode(message))
+          // this.connections[teamId][peerId].deliver(
+          //   new TextDecoder().decode(message)
+          // )
         } else {
           const transformedPayload = this.transform.inbound(payload)
           wrappedAdapter.emit("message", transformedPayload)
@@ -124,7 +260,51 @@ export class LocalFirstAuthProvider extends AuthProvider {
 }
 
 export type AuthProviderConfig = {
-  user: UserWithSecrets
   device: DeviceWithSecrets
-  team: Team
+  user?: UserWithSecrets
+  source: string // persisted state
 }
+
+type DeviceInvitation = {
+  shareId: ShareId
+  userName: string
+  userId: string
+  invitationSeed: string
+}
+
+type MemberInvitation = {
+  shareId: ShareId
+  user: UserWithSecrets
+  invitationSeed: string
+}
+
+type ShareId = Hash & { __shareId: true }
+type TeamId = ShareId
+
+const authChannelName = (shareId: ShareId) => `a/${shareId}` as ChannelId
+
+type Share = {
+  team: Team
+  teamKeys: KeysetWithSecrets
+  documentIds: Set<DocumentId>
+  connections: Record<PeerId, Connection>
+}
+
+type InviteMemberOptions = Parameters<typeof Team.prototype.inviteMember>[0]
+type InviteDeviceOptions = Parameters<typeof Team.prototype.inviteDevice>[0]
+
+type InviteMemberParams = {
+  shareId: ShareId
+} & Partial<InviteMemberOptions>
+
+type InviteDeviceParams = {
+  shareId: ShareId
+} & Partial<InviteDeviceOptions>
+
+type PartiallySerializedShare = {
+  encryptedTeam: Base58
+  encryptedTeamKeys: Base58
+  documentIds: DocumentId[]
+}
+
+type PartiallySerializedState = Record<ShareId, PartiallySerializedShare>
