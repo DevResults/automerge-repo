@@ -44,7 +44,7 @@ export class LocalFirstAuthProvider extends AuthProvider {
       shares[shareId] = {
         encryptedTeam: share.team.save(),
         encryptedTeamKeys: symmetric.encrypt(
-          share.teamKeys,
+          share.team.teamKeys,
           this.device.keys.secretKey
         ),
         documentIds: [...share.documentIds],
@@ -73,14 +73,9 @@ export class LocalFirstAuthProvider extends AuthProvider {
     }
   }
 
-  public addShare(
-    team: Team,
-    teamKeys: KeysetWithSecrets,
-    documentIds: DocumentId[] = []
-  ) {
+  public addShare(team: Team, documentIds: DocumentId[] = []) {
     this.shares[team.id] = {
       team,
-      teamKeys,
       documentIds: new Set(documentIds),
       connections: {},
     }
@@ -262,7 +257,7 @@ export class LocalFirstAuthProvider extends AuthProvider {
 export type AuthProviderConfig = {
   device: DeviceWithSecrets
   user?: UserWithSecrets
-  source: string // persisted state
+  source?: string // persisted state
 }
 
 type DeviceInvitation = {

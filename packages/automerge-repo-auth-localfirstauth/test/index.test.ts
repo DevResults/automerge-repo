@@ -26,8 +26,8 @@ describe("localfirst/auth provider", () => {
     const aliceAuthProvider = new LocalFirstAuthProvider({
       device: aliceDevice,
       user: alice,
-      team: aliceTeam,
     })
+    aliceAuthProvider.
     const aliceRepo = new Repo({
       network: [new MessageChannelNetworkAdapter(aliceToBob)],
       peerId: "alice" as PeerId,
