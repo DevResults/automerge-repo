@@ -8,7 +8,7 @@ import {
 } from "@automerge/automerge-repo"
 import * as Auth from "@localfirst/auth"
 import debug from "debug"
-import { forwardEvents } from "./forwardEvents"
+import { forwardEvents } from "./forwardEvents.js"
 import {
   Config,
   EncryptedMessage,
@@ -22,7 +22,7 @@ import {
   ShareId,
   isDeviceInvitation,
   isEncryptedMessage,
-} from "./types"
+} from "./types.js"
 
 const { encrypt, decrypt } = Auth.symmetric
 
